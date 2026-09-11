@@ -200,3 +200,10 @@
 #fbjs .grecaptcha-badge {
   visibility: hidden;
 }
+
+/* Vertx Forms: hide the "Powered by Formbricks" signature. Client-side CSS only — no
+   server logic touched, consistent with Formbricks' own EE_LICENSE carve-out that CSS
+   served client-side is not part of the restricted Enterprise-licensed code. */
+#fbjs a[href*="formbricks.com?utm_source=formbricks-app"] {
+  display: none !important;
+}
