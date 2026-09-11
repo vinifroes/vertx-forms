@@ -204,6 +204,9 @@
 /* Vertx Forms: hide the "Powered by Formbricks" signature. Client-side CSS only — no
    server logic touched, consistent with Formbricks' own EE_LICENSE carve-out that CSS
    served client-side is not part of the restricted Enterprise-licensed code. */
-#fbjs a[href*="formbricks.com?utm_source=formbricks-app"] {
+/* No #fbjs scoping: that wrapper only exists for the embedded-widget delivery mode.
+   The hosted link-survey page (survey.xvertx.com/s/...) renders this same badge with
+   no such wrapper, so an unscoped selector is needed for it to take effect there too. */
+a[href*="formbricks.com?utm_source=formbricks-app"] {
   display: none !important;
 }
