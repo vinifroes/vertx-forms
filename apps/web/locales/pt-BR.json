@@ -2151,7 +2151,7 @@
       "upload_contacts_modal_upload_btn": "Fazer upload de contatos",
       "upload_contacts_success": "Contatos carregados com sucesso"
     },
-    "formbricks_logo": "Logo da Formbricks",
+    "formbricks_logo": "Logo da Vertx",
     "general": {
       "cannot_delete_only_workspace": "Este é o seu único workspace, não pode ser excluído. Crie um novo workspace primeiro.",
       "cooldown_period_updated_successfully": "Período de espera atualizado com sucesso",
