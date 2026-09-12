@@ -207,6 +207,14 @@ function PictureSelect({
                     onChange={() => {
                       handleSingleSelectChange(option.id);
                     }}
+                    onClick={() => {
+                      // A native radio only fires "change" when checked actually transitions,
+                      // so re-clicking the picture that's already selected (e.g. after Back
+                      // restores a prior answer) would otherwise be silently dropped instead of
+                      // re-confirming it and re-running auto-progress/logic on the next
+                      // submit. onClick fires on every click regardless, so always (re)confirm.
+                      handleSingleSelectChange(option.id);
+                    }}
                     {...getRadioProps(option.id)}
                   />
                   {/* Image container with border when selected */}

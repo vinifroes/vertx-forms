@@ -446,9 +446,19 @@ function SingleSelectOptionItem({
             onSelect(option.id);
           }}
           onClick={() => {
-            // Native radios cannot be unchecked by re-clicking; allow deselect when not required.
+            // A native radio only fires "change" when its checked state actually
+            // transitions, so re-clicking the option that's already selected (e.g. after
+            // Back restores a prior answer) fires neither onChange nor this onClick's own
+            // deselect branch below — silently dropping the click instead of re-confirming
+            // the answer and re-running block logic on the next submit (ENG jump-on-reselect
+            // bug). onClick fires on every click regardless of that transition, so it is the
+            // one place to always treat a click as a genuine answer: deselect for a
+            // non-required re-click (the only case previously handled here), otherwise
+            // (re)confirm the selection so auto-progress and jump logic see it.
             if (!required && isSelected) {
               onDeselect(option.id);
+            } else {
+              onSelect(option.id);
             }
           }}
           {...getRadioProps(option.id)}
@@ -608,8 +618,13 @@ function OtherOptionLabel({
             onSelect(otherOptionId);
           }}
           onClick={() => {
+            // See the matching comment in SingleSelectOptionItem: onClick always fires (unlike
+            // onChange, which native radios skip on a same-value re-click), so it must
+            // (re)confirm the selection here too, or a re-click after Back is silently dropped.
             if (!required && isOtherSelected) {
               onDeselect(otherOptionId);
+            } else {
+              onSelect(otherOptionId);
             }
           }}
           {...getRadioProps(otherOptionId)}

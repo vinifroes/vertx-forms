@@ -141,6 +141,14 @@ function NPS({
           onChange={() => {
             handleSelect(number);
           }}
+          onClick={() => {
+            // A native radio only fires "change" when checked actually transitions, so
+            // re-clicking the value that's already selected (e.g. after Back restores a
+            // prior answer) would otherwise be silently dropped instead of re-confirming the
+            // score and re-running auto-progress/logic on the next submit. onClick fires on
+            // every click regardless, so always (re)confirm here too.
+            handleSelect(number);
+          }}
           disabled={disabled}
           className="sr-only"
           aria-label={`Rate ${String(number)} out of 10`}
