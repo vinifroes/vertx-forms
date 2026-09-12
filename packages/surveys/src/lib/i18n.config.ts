@@ -48,10 +48,25 @@ export const resolveFallbackBundles = (code: string): string[] => {
     : [DEFAULT_SURVEY_LANGUAGE_CODE];
 };
 
+// Vertx fork note: this Formbricks instance serves a single Portuguese-language project end to end,
+// so the survey "chrome" strings (Required, Takes X minutes, Please fill out this field, etc.) must
+// always render in pt-BR. Normally that would come from the survey's `defaultLanguage`/`languages`,
+// but this particular survey's content was saved under the "en-US" key by an early configuration
+// mistake, and the management API's PATCH /surveys endpoint does not accept `defaultLanguage` as an
+// editable field (nor would server-side validation allow `languages[].default` to disagree with the
+// stored `defaultLanguage`), so it cannot be corrected after creation. Rather than depend on that,
+// force the chrome locale here, independent of whatever language code the survey/backend reports.
+//
+// This only affects the i18next-driven UI chrome (via this shared `i18n` instance) — it does not
+// touch question/choice CONTENT, which is looked up separately by `getLocalizedValue`/`getI18nLanguage`
+// against the survey's own language-keyed content object and must keep resolving "en-US"/"default".
+export const FORCED_SURVEY_CHROME_LANGUAGE = "pt-BR";
+
 i18n
   .use(ICU)
   .use(initReactI18next)
   .init({
+    lng: FORCED_SURVEY_CHROME_LANGUAGE,
     fallbackLng: resolveFallbackBundles,
     supportedLngs: [...SURVEY_RUNTIME_LANGUAGE_CODES],
 
@@ -85,5 +100,13 @@ i18n
 
     interpolation: { escapeValue: false },
   });
+
+// Every caller in this codebase that wants to change the chrome language ultimately calls
+// `i18n.changeLanguage` on this shared singleton (I18nProvider, LanguageSwitch, getTranslations()).
+// Overriding it here — rather than at each call site — is the one chokepoint that guarantees none of
+// them can drift the chrome UI away from pt-BR, including future call sites.
+const originalChangeLanguage = i18n.changeLanguage.bind(i18n);
+i18n.changeLanguage = ((_lng?: string, callback?: (...args: any[]) => void) =>
+  originalChangeLanguage(FORCED_SURVEY_CHROME_LANGUAGE, callback)) as typeof i18n.changeLanguage;
 
 export default i18n;
