@@ -68,6 +68,16 @@ export function CardlessSurveyLayout({
     }
   }, []);
 
+  const scrollToTop = useCallback(() => {
+    if (scrollRef.current) {
+      scrollRef.current.scrollTop = 0;
+    }
+    // Belt-and-braces: if some ancestor of this layout lets the page grow instead of confining the
+    // scroll to `scrollRef` (e.g. a shell that doesn't cap the container's height), the browser
+    // window itself is the thing actually scrolled, and resetting only `scrollRef` would be a no-op.
+    window.scrollTo({ top: 0 });
+  }, []);
+
   useEffect(() => {
     const element = scrollRef.current;
     if (!element) return;
@@ -84,10 +94,14 @@ export function CardlessSurveyLayout({
     };
   }, [checkScroll]);
 
-  // Re-check the scroll position whenever the visible card changes, since the content height changes.
+  // When the visible block changes (the respondent advanced/went back a page), the new block should
+  // always open scrolled to its top rather than inheriting the scroll position left over from the
+  // previous block (which, after answering a full page, is usually near the bottom). Re-check the
+  // scroll position afterwards since the content height also changes with the new block.
   useEffect(() => {
+    scrollToTop();
     checkScroll();
-  }, [blockId, checkScroll]);
+  }, [blockId, scrollToTop, checkScroll]);
 
   // The welcome card has no progress yet; a 0% bar reads as a stray band, so hide it on the welcome card.
   const showProgressBarRow = showProgressBar && blockId !== "start";
