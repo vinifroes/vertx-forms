@@ -1,10 +1,14 @@
-import { useEffect, useRef, useState } from "preact/hooks";
+import { useEffect, useMemo, useRef, useState } from "preact/hooks";
 import { type TJsFileUploadParams } from "@formbricks/types/js";
 import { type TResponseData, type TResponseTtc } from "@formbricks/types/responses";
 import { type TUploadFileConfig } from "@formbricks/types/storage";
 import { type TSurveyBlock } from "@formbricks/types/surveys/blocks";
 import { TSurveyElementTypeEnum } from "@formbricks/types/surveys/constants";
-import { type TSurveyElement, type TSurveyRankingElement } from "@formbricks/types/surveys/elements";
+import {
+  type TSurveyElement,
+  type TSurveyElementChoice,
+  type TSurveyRankingElement,
+} from "@formbricks/types/surveys/elements";
 import { TSurveyLanguage } from "@formbricks/types/surveys/types";
 import { TValidationErrorMap } from "@formbricks/types/surveys/validation-rules";
 import { BackButton } from "@/components/buttons/back-button";
@@ -16,11 +20,46 @@ import {
   shouldHideSubmitButtonForAutoProgress,
   shouldTriggerAutoProgress,
 } from "@/lib/auto-progress";
+import { fetchMunicipiosByUf } from "@/lib/ibge-municipios";
 import { getLocalizedValue } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 import { getFirstErrorMessage, validateBlockResponses } from "@/lib/validation/evaluator";
 
 const AUTO_PROGRESS_SUBMIT_DELAY_MS = 350;
+
+// --- Vertx fork: b1q6 ("Em qual município você mora?") choices depend on the b1q5 ("Em qual
+// estado você mora?") answer within the same block (block 01). Formbricks has no native
+// "dependent choices" mechanism (see packages/types/surveys/elements.ts), so this is handled
+// entirely client-side: whenever b1q5's value changes, fetch that state's municipalities from the
+// public IBGE API and swap them in as b1q6's choices for this render only (never persisted back to
+// the survey). These IDs are specific to this one national survey, not a generic feature. ---
+const ESTADO_ELEMENT_ID = "b1q5";
+const MUNICIPIO_ELEMENT_ID = "b1q6";
+const MUNICIPIO_OTHER_CHOICE_ID = "other";
+
+/** Always-available manual-entry choice, so the field never gets stuck — before a state is picked,
+ * while the IBGE list is loading, or if the IBGE API fails outright. Reuses SingleSelect's native
+ * "other" choice (free-text input), rather than inventing a new UI for the fallback path. */
+const municipioOtherChoice = (label: string): TSurveyElementChoice => ({
+  id: MUNICIPIO_OTHER_CHOICE_ID,
+  label: { default: label, "en-US": label },
+});
+
+const MUNICIPIO_CHOICES_NO_UF_SELECTED: TSurveyElementChoice[] = [
+  municipioOtherChoice("Selecione o estado acima para ver a lista de municípios, ou digite aqui"),
+];
+
+const MUNICIPIO_CHOICES_LOAD_FAILED: TSurveyElementChoice[] = [
+  municipioOtherChoice("Não foi possível carregar a lista de municípios agora — digite o nome aqui"),
+];
+
+const municipioChoicesFromNames = (names: string[]): TSurveyElementChoice[] => [
+  ...names.map((name, index) => ({
+    id: `ibge-municipio-${index}`,
+    label: { default: name, "en-US": name },
+  })),
+  municipioOtherChoice("Outro (não está na lista)"),
+];
 
 /**
  * Anchors are deliberately absent: they are focusable, but a link is never what a card asks of the
@@ -130,6 +169,67 @@ export function BlockConditional({
   const ttcCollectorRef = useRef<TResponseTtc>({});
   const autoProgressingInFlightRef = useRef(false);
   const containerRef = useRef<HTMLDivElement>(null);
+
+  // --- Vertx fork: b1q6 municipio choices depend on b1q5 estado (see constants above) ---
+  const hasMunicipioDependency = block.elements.some((element) => element.id === MUNICIPIO_ELEMENT_ID);
+  const selectedEstadoValue = value[ESTADO_ELEMENT_ID];
+  const selectedUf = typeof selectedEstadoValue === "string" && selectedEstadoValue ? selectedEstadoValue : undefined;
+
+  const [municipioNamesByUf, setMunicipioNamesByUf] = useState<Record<string, string[] | "error">>({});
+  const previousUfRef = useRef<string | undefined>(selectedUf);
+
+  // Kept separate from the fetch effect below: this one only cares about `selectedUf` changing: it
+  // must not re-run (and risk re-clearing) merely because a fetch resolved and updated
+  // `municipioNamesByUf` for some other render.
+  useEffect(() => {
+    if (!hasMunicipioDependency) return;
+
+    // The estado answer changed after the municipio field already had a value (from this state's
+    // list) — that answer is very likely no longer valid for the new state, so clear it rather than
+    // leave a São Paulo municipality selected under Goiás.
+    if (previousUfRef.current !== undefined && previousUfRef.current !== selectedUf) {
+      onChange({ [MUNICIPIO_ELEMENT_ID]: undefined });
+    }
+    previousUfRef.current = selectedUf;
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- onChange identity is stable per block render and isn't a real dependency here
+  }, [hasMunicipioDependency, selectedUf]);
+
+  useEffect(() => {
+    if (!hasMunicipioDependency || !selectedUf) return;
+    if (municipioNamesByUf[selectedUf] !== undefined) return; // already fetched (or cached) for this UF
+
+    let cancelled = false;
+    fetchMunicipiosByUf(selectedUf)
+      .then((names) => {
+        if (cancelled) return;
+        setMunicipioNamesByUf((prev) => ({ ...prev, [selectedUf]: names ?? "error" }));
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setMunicipioNamesByUf((prev) => ({ ...prev, [selectedUf]: "error" }));
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [hasMunicipioDependency, selectedUf, municipioNamesByUf]);
+
+  const municipioChoices = useMemo<TSurveyElementChoice[]>(() => {
+    if (!selectedUf) return MUNICIPIO_CHOICES_NO_UF_SELECTED;
+    const namesOrError = municipioNamesByUf[selectedUf];
+    if (namesOrError === undefined) return MUNICIPIO_CHOICES_NO_UF_SELECTED; // still loading
+    if (namesOrError === "error") return MUNICIPIO_CHOICES_LOAD_FAILED;
+    return municipioChoicesFromNames(namesOrError);
+  }, [selectedUf, municipioNamesByUf]);
+
+  /** Swaps in the dynamic municipio choices for b1q6 only; every other element is passed through
+   * unchanged. Never mutates the survey's own stored element/choices. */
+  const resolveElementForRender = (element: TSurveyElement): TSurveyElement => {
+    if (element.id !== MUNICIPIO_ELEMENT_ID || element.type !== TSurveyElementTypeEnum.MultipleChoiceSingle) {
+      return element;
+    }
+    return { ...element, choices: municipioChoices };
+  };
 
   // Screen-reader/keyboard users continue right where they act: when the card
   // appears after user navigation (or on an autofocus-allowed initial render),
@@ -444,7 +544,7 @@ export function BlockConditional({
                 <ElementConditional
                   key={element.id}
                   surveyLanguages={surveyLanguages}
-                  element={element}
+                  element={resolveElementForRender(element)}
                   value={value[element.id]}
                   onChange={(responseData) => handleElementChange(element.id, responseData)}
                   onFileUpload={onFileUpload}
