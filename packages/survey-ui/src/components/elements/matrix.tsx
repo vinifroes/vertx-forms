@@ -155,10 +155,21 @@ function Matrix({
 
                   return (
                     <tr key={row.id} className={cn("relative", baseBgColor)} dir={dir}>
-                      {/* Row label */}
-                      <th scope="row" id={rowHeaderId} className={cn("rounded-s-input p-2 align-middle")}>
-                        <div className="flex flex-col gap-0 leading-none">
-                          <Label>{row.label}</Label>
+                      {/* Row label. Browsers apply `text-align: center` to <th> by default (unlike
+                          <td>), which is invisible for a single-line label (its box is exactly as wide
+                          as the text) but becomes visibly inconsistent once a longer label wraps to
+                          multiple lines — each wrapped line then centers within a box narrower than
+                          the full column, while single-line rows stay flush left. Column headers avoid
+                          this because they explicitly opt into centering (`text-center` + Label's
+                          `justify-center` below); row labels instead need an explicit left alignment
+                          that matches Label's own default flex-start layout, so wrapped and unwrapped
+                          rows render identically. */}
+                      <th
+                        scope="row"
+                        id={rowHeaderId}
+                        className={cn("rounded-s-input p-2 text-left align-middle")}>
+                        <div className="flex flex-col gap-0 text-left leading-none">
+                          <Label className="justify-start text-left">{row.label}</Label>
                         </div>
                       </th>
                       {/* Column options for this row */}
