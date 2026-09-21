@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "preact/hooks";
+import { useTranslation } from "react-i18next";
 import { type TJsFileUploadParams } from "@formbricks/types/js";
 import { type TResponseData, type TResponseTtc } from "@formbricks/types/responses";
 import { type TUploadFileConfig } from "@formbricks/types/storage";
@@ -20,8 +21,8 @@ import {
   shouldHideSubmitButtonForAutoProgress,
   shouldTriggerAutoProgress,
 } from "@/lib/auto-progress";
-import { fetchMunicipiosByUf } from "@/lib/ibge-municipios";
 import { getLocalizedValue } from "@/lib/i18n";
+import { fetchMunicipiosByUf } from "@/lib/ibge-municipios";
 import { cn } from "@/lib/utils";
 import { getFirstErrorMessage, validateBlockResponses } from "@/lib/validation/evaluator";
 
@@ -39,26 +40,22 @@ const MUNICIPIO_OTHER_CHOICE_ID = "other";
 
 /** Always-available manual-entry choice, so the field never gets stuck — before a state is picked,
  * while the IBGE list is loading, or if the IBGE API fails outright. Reuses SingleSelect's native
- * "other" choice (free-text input), rather than inventing a new UI for the fallback path. */
+ * "other" choice (free-text input), rather than inventing a new UI for the fallback path.
+ *
+ * The label is passed in already translated rather than read from a module-level constant: these
+ * strings belong in the locale files like every other piece of survey chrome, and `t` is only
+ * reachable from inside the component. */
 const municipioOtherChoice = (label: string): TSurveyElementChoice => ({
   id: MUNICIPIO_OTHER_CHOICE_ID,
   label: { default: label, "en-US": label },
 });
 
-const MUNICIPIO_CHOICES_NO_UF_SELECTED: TSurveyElementChoice[] = [
-  municipioOtherChoice("Selecione o estado acima para ver a lista de municípios, ou digite aqui"),
-];
-
-const MUNICIPIO_CHOICES_LOAD_FAILED: TSurveyElementChoice[] = [
-  municipioOtherChoice("Não foi possível carregar a lista de municípios agora — digite o nome aqui"),
-];
-
-const municipioChoicesFromNames = (names: string[]): TSurveyElementChoice[] => [
+const municipioChoicesFromNames = (names: string[], otherLabel: string): TSurveyElementChoice[] => [
   ...names.map((name, index) => ({
     id: `ibge-municipio-${index}`,
     label: { default: name, "en-US": name },
   })),
-  municipioOtherChoice("Outro (não está na lista)"),
+  municipioOtherChoice(otherLabel),
 ];
 
 /**
@@ -170,10 +167,13 @@ export function BlockConditional({
   const autoProgressingInFlightRef = useRef(false);
   const containerRef = useRef<HTMLDivElement>(null);
 
+  const { t } = useTranslation();
+
   // --- Vertx fork: b1q6 municipio choices depend on b1q5 estado (see constants above) ---
   const hasMunicipioDependency = block.elements.some((element) => element.id === MUNICIPIO_ELEMENT_ID);
   const selectedEstadoValue = value[ESTADO_ELEMENT_ID];
-  const selectedUf = typeof selectedEstadoValue === "string" && selectedEstadoValue ? selectedEstadoValue : undefined;
+  const selectedUf =
+    typeof selectedEstadoValue === "string" && selectedEstadoValue ? selectedEstadoValue : undefined;
 
   const [municipioNamesByUf, setMunicipioNamesByUf] = useState<Record<string, string[] | "error">>({});
   const previousUfRef = useRef<string | undefined>(selectedUf);
@@ -215,12 +215,13 @@ export function BlockConditional({
   }, [hasMunicipioDependency, selectedUf, municipioNamesByUf]);
 
   const municipioChoices = useMemo<TSurveyElementChoice[]>(() => {
-    if (!selectedUf) return MUNICIPIO_CHOICES_NO_UF_SELECTED;
+    const awaitingEstado = [municipioOtherChoice(t("common.municipio_select_estado_first"))];
+    if (!selectedUf) return awaitingEstado;
     const namesOrError = municipioNamesByUf[selectedUf];
-    if (namesOrError === undefined) return MUNICIPIO_CHOICES_NO_UF_SELECTED; // still loading
-    if (namesOrError === "error") return MUNICIPIO_CHOICES_LOAD_FAILED;
-    return municipioChoicesFromNames(namesOrError);
-  }, [selectedUf, municipioNamesByUf]);
+    if (namesOrError === undefined) return awaitingEstado; // still loading
+    if (namesOrError === "error") return [municipioOtherChoice(t("common.municipio_load_failed"))];
+    return municipioChoicesFromNames(namesOrError, t("common.municipio_other"));
+  }, [selectedUf, municipioNamesByUf, t]);
 
   /** Swaps in the dynamic municipio choices for b1q6 only; every other element is passed through
    * unchanged. Never mutates the survey's own stored element/choices. */
