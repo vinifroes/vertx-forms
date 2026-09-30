@@ -287,7 +287,6 @@ checksums:
     common/finish: ffa7a10f71182b48fefed7135bee24fa
     common/finished_at: 05d2fa31cf3b2e2255729ec7898240c2
     common/first_name: cf040a5d6a9fd696be400380cc99f54b
-    common/formbricks_homepage: 95a78e9e1812a97221d1f69015561e68
     common/formbricks_version: d9967c797f3e49ca0cae78bc0ebd19cb
     common/full_name: f45991923345e8322c9ff8cd6b7e2b16
     common/gathering_responses: c5914490ed81bd77f13d411739f0c9ef
@@ -2074,7 +2073,7 @@ checksums:
     workspace/contacts/upload_contacts_modal_preview: 2ea999d47068d8d626cde456ae0ac44a
     workspace/contacts/upload_contacts_modal_upload_btn: 47b7f3bcf478a7d8dc258d2efc80af37
     workspace/contacts/upload_contacts_success: cd5d6b6d587586dd4f944868c92835bc
-    workspace/formbricks_logo: b7ee57de32c8b13463cc8ca8643eddd4
+    workspace/formbricks_logo: 841233979a7b6372da9df896e18c8078
     workspace/general/cannot_delete_only_workspace: 853f32a75d92b06eaccc0d43d767c183
     workspace/general/cooldown_period_updated_successfully: 55ff7f3874ea30a1961107c495407696
     workspace/general/custom_scripts: a6a06a2e20764d76d3e22e5e17d98dbb
